@@ -43,6 +43,19 @@
 
 (defvar color-identifiers:timer)
 
+;;; Custom variables
+
+(defgroup color-identifiers nil
+  "Major mode for editing jinja2 code."
+  :prefix "color-identifiers-"
+  :group 'ui)
+
+(defcustom color-identifiers-always-on nil
+  "Try to color identifiers in unknown mode."
+  :type 'boolean
+  :group 'color-identifiers)
+
+
 ;;;###autoload
 (define-minor-mode color-identifiers-mode
   "Color the identifiers in the current buffer based on their names."
@@ -404,7 +417,7 @@ incompatible with Emacs Lisp syntax, such as reader macros (#)."
                    "\\_<\\(\\(?:\\s_\\|\\sw\\)+\\)"
                    (nil))))
 
-
+(defvar unknown-mode `('unknown-mode "[^.][[:space:]]*" "\\_<\\([a-zA-Z_$]\\(?:\\s_\\|\\sw\\)*\\)" (nil)))
 ;;; PACKAGE INTERNALS ==========================================================
 
 (defvar color-identifiers:timer nil
@@ -533,32 +546,33 @@ generated if not present there."
 Identifiers are defined by `color-identifiers:modes-alist'.
 If supplied, iteration only continues if CONTINUE-P evaluates to true."
   (let ((entry (assoc major-mode color-identifiers:modes-alist)))
-    (when entry
-      (let ((identifier-context-re (nth 1 entry))
-            (identifier-re (nth 2 entry))
-            (identifier-faces
-             (if (functionp (nth 3 entry))
-                 (funcall (nth 3 entry))
-               (nth 3 entry))))
-        ;; Skip forward to the next identifier that matches all three conditions
-        (condition-case nil
-            (while (and (< (point) limit)
-                        (if continue-p (funcall continue-p) t))
-              (if (not (or (memq (get-text-property (point) 'face) identifier-faces)
-                           (let ((flface-prop (get-text-property (point) 'font-lock-face)))
-                             (and flface-prop (memq flface-prop identifier-faces)))
-                           (get-text-property (point) 'color-identifiers:fontified)))
-                  (goto-char (next-property-change (point) nil limit))
-                (if (not (and (looking-back identifier-context-re)
-                              (looking-at identifier-re)))
-                    (progn
-                      (forward-char)
-                      (re-search-forward identifier-re limit)
-                      (goto-char (match-beginning 0)))
-                  ;; Found an identifier. Run `fn' on it
-                  (funcall fn (match-beginning 1) (match-end 1))
-                  (goto-char (match-end 1)))))
-          (search-failed nil))))))
+    (when (not entry)
+      (setq entry unknown-mode))
+    (let ((identifier-context-re (nth 1 entry))
+          (identifier-re (nth 2 entry))
+          (identifier-faces
+           (if (functionp (nth 3 entry))
+               (funcall (nth 3 entry))
+             (nth 3 entry))))
+      ;; Skip forward to the next identifier that matches all three conditions
+      (condition-case nil
+          (while (and (< (point) limit)
+                    (if continue-p (funcall continue-p) t))
+            (if (not (or (memq (get-text-property (point) 'face) identifier-faces)
+                      (let ((flface-prop (get-text-property (point) 'font-lock-face)))
+                        (and flface-prop (memq flface-prop identifier-faces)))
+                      (get-text-property (point) 'color-identifiers:fontified)))
+                (goto-char (next-property-change (point) nil limit))
+              (if (not (and (looking-back identifier-context-re)
+                        (looking-at identifier-re)))
+                  (progn
+                    (forward-char)
+                    (re-search-forward identifier-re limit)
+                    (goto-char (match-beginning 0)))
+                ;; Found an identifier. Run `fn' on it
+                (funcall fn (match-beginning 1) (match-end 1))
+                (goto-char (match-end 1)))))
+        (search-failed nil)))))
 
 (defun color-identifiers:colorize (limit)
   (color-identifiers:scan-identifiers
@@ -574,8 +588,9 @@ If supplied, iteration only continues if CONTINUE-P evaluates to true."
   "Enable `color-identifiers-mode' in the current buffer if desired.
 When `major-mode' is listed in `color-identifiers:modes-alist', then
 `color-identifiers-mode' will be enabled."
-  (when (assoc major-mode color-identifiers:modes-alist)
-    (color-identifiers-mode 1)))
+  (when (or color-identifiers-always-on
+           (assoc major-mode color-identifiers:modes-alist))
+  (color-identifiers-mode 1)))
 
 (provide 'color-identifiers-mode)
 
