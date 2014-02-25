@@ -55,6 +55,11 @@
   :type 'boolean
   :group 'color-identifiers)
 
+(defcustom color-identifiers-timer-duration 5.0
+  "Idle time to wait for Emacs before refresh."
+  :type 'float
+  :group 'color-identifiers)
+
 
 ;;;###autoload
 (define-minor-mode color-identifiers-mode
@@ -69,7 +74,7 @@
         (font-lock-add-keywords nil '((color-identifiers:colorize . default)) t)
         (unless color-identifiers:timer
           (setq color-identifiers:timer
-                (run-with-idle-timer 5 t 'color-identifiers:refresh)))
+                (run-with-idle-timer color-identifiers-timer-duration t 'color-identifiers:refresh)))
         (ad-activate 'enable-theme))
     (when color-identifiers:timer
       (cancel-timer color-identifiers:timer))
