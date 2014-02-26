@@ -593,7 +593,9 @@ If supplied, iteration only continues if CONTINUE-P evaluates to true."
   "Enable `color-identifiers-mode' in the current buffer if desired.
 When `major-mode' is listed in `color-identifiers:modes-alist', then
 `color-identifiers-mode' will be enabled."
-  (when (or color-identifiers-always-on
+  (when (or (and
+          color-identifiers-always-on
+          (not (eq major-mode 'minibuffer-inactive-mode)))
            (assoc major-mode color-identifiers:modes-alist))
   (color-identifiers-mode 1)))
 
