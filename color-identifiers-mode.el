@@ -7,7 +7,7 @@
 ;; Created: 24 Jan 2014
 ;; Version: 1.1
 ;; Keywords: faces, languages
-;; Package-Requires: ((dash "2.5.0") (dash-functional "1.0.0") (emacs "24"))
+;; Package-Requires: ((dash "2.5.0") (emacs "24"))
 
 ;; This file is not a part of GNU Emacs.
 
@@ -38,7 +38,6 @@
 (require 'advice)
 (require 'color)
 (require 'dash)
-(require 'dash-functional)
 (require 'python)
 
 (defvar color-identifiers:timer)
@@ -108,6 +107,16 @@ unfontified words will be considered.")
 
 (defvar color-identifiers:num-colors 10
   "The number of different colors to generate.")
+
+(defvar color-identifiers:color-luminance nil
+  "HSL luminance of identifier colors. If nil, calculated from the luminance
+of the default face.")
+
+(defvar color-identifiers:min-color-saturation 0.0
+    "The minimum saturation that identifier colors will be generated with.")
+
+(defvar color-identifiers:max-color-saturation 1.0
+    "The maxumum saturation that identifier colors will be generated with.")
 
 (defvar color-identifiers:mode-to-scan-fn-alist nil
   "Alist from major modes to their declaration scan functions, for internal use.
@@ -245,8 +254,9 @@ arguments, loops (for .. in), or for comprehensions."
     (delete-dups result)
     result))
 
-(color-identifiers:set-declaration-scan-fn
- 'python-mode 'color-identifiers:python-get-declarations)
+(when (fboundp 'python-nav-forward-defun)
+  (color-identifiers:set-declaration-scan-fn
+   'python-mode 'color-identifiers:python-get-declarations))
 
 (add-to-list
  'color-identifiers:modes-alist
@@ -428,8 +438,9 @@ incompatible with Emacs Lisp syntax, such as reader macros (#)."
 (defvar color-identifiers:timer nil
   "Timer for running `color-identifiers:refresh'.")
 
-(defvar-local color-identifiers:identifiers nil
+(defvar color-identifiers:identifiers nil
   "The set of identifiers in the current buffer, for internal use.")
+(make-variable-buffer-local 'color-identifiers:identifiers)
 
 (defvar color-identifiers:colors nil
   "List of generated hex colors for internal use.")
@@ -445,7 +456,10 @@ incompatible with Emacs Lisp syntax, such as reader macros (#)."
   "Generate perceptually distinct colors with the same luminance in HSL space.
 Colors are output to `color-identifiers:colors'."
   (interactive)
-  (let* ((luminance (max 0.35 (min 0.8 (color-identifiers:attribute-luminance :foreground))))
+  (let* ((luminance (or color-identifiers:color-luminance
+                       (max 0.35 (min 0.8 (color-identifiers:attribute-luminance :foreground)))))
+         (min-saturation (float color-identifiers:min-color-saturation))
+         (saturation-range (- (float color-identifiers:max-color-saturation) min-saturation))
          (bgcolor (color-identifiers:attribute-lab :background))
          (candidates '())
          (chosens '())
@@ -458,7 +472,9 @@ Colors are output to `color-identifiers:colors'."
         (add-to-list
          'candidates
          (apply 'color-srgb-to-lab
-                (color-hsl-to-rgb (/ h n-1) (/ s n-1) luminance)))))
+                (color-hsl-to-rgb (/ h n-1)
+                                  (+ min-saturation (* (/ s n-1) saturation-range))
+                                  luminance)))))
     (let ((choose-candidate (lambda (candidate)
                               (delq candidate candidates)
                               (push candidate chosens))))
@@ -472,20 +488,22 @@ Colors are output to `color-identifiers:colors'."
                                                     (cons bgcolor chosens)))))
                                 candidates))
                ;; Take the candidate with the highest min distance
-               (best (-max-by (-on '> 'cdr) min-dists)))
+               (best (-max-by (lambda (x y) (> (cdr x) (cdr y))) min-dists)))
           (funcall choose-candidate (car best))))
       (setq color-identifiers:colors
             (-map (lambda (lab)
                     (apply 'color-rgb-to-hex (apply 'color-lab-to-srgb lab)))
                   chosens)))))
 
-(defvar-local color-identifiers:color-index-for-identifier nil
+(defvar color-identifiers:color-index-for-identifier nil
   "Alist of identifier-index pairs for internal use.
 The index refers to `color-identifiers:colors'.")
+(make-variable-buffer-local 'color-identifiers:color-index-for-identifier)
 
-(defvar-local color-identifiers:current-index 0
+(defvar color-identifiers:current-index 0
   "Current color index for new identifiers, for internal use.
 The index refers to `color-identifiers:colors'.")
+(make-variable-buffer-local 'color-identifiers:current-index)
 
 (defun color-identifiers:attribute-luminance (attribute)
   "Find the HSL luminance of the specified ATTRIBUTE on the default face."
