@@ -442,7 +442,7 @@ incompatible with Emacs Lisp syntax, such as reader macros (#)."
                    "\\_<\\(\\(?:\\s_\\|\\sw\\)+\\)"
                    (nil))))
 
-(defvar unknown-mode `('unknown-mode "[^.][[:space:]]*" "\\_<\\([a-zA-Z_$]\\(?:\\s_\\|\\sw\\)*\\)" (nil)))
+(defvar unknown-mode `('unknown-mode "\\(^\\|[^.]\\)[[:space:]]*" "\\_<\\([a-zA-Z_$]\\(?:\\s_\\|\\sw\\)*\\)" (nil)))
 ;;; PACKAGE INTERNALS ==========================================================
 
 (defvar color-identifiers:timer nil
