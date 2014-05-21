@@ -42,10 +42,10 @@
 
 (defvar color-identifiers:timer)
 
-;;; Custom variables
+;;; USER-VISIBLE VARIABLES AND FUNCTIONS =======================================
 
 (defgroup color-identifiers nil
-  "Major mode for editing jinja2 code."
+  "Emacs minor mode to highlight each source code identifier uniquely based on its name."
   :prefix "color-identifiers-"
   :group 'ui)
 
@@ -59,6 +59,59 @@
   :type 'float
   :group 'color-identifiers)
 
+
+(defcustom color-identifiers:modes-alist nil
+  "Alist of major modes and the ways to distinguish identifiers in those modes.
+The value of each cons cell provides three constraints for finding identifiers.
+A word must match all three constraints to be colored as an identifier.  The
+value has the form (IDENTIFIER-CONTEXT-RE IDENTIFIER-RE IDENTIFIER-FACES).
+
+IDENTIFIER-CONTEXT-RE is a regexp matching the text that must precede an
+identifier.
+IDENTIFIER-RE is a regexp whose first capture group matches identifiers.
+IDENTIFIER-FACES is a list of faces with which the major mode decorates
+identifiers or a function returning such a list.  If the list includes nil,
+unfontified words will be considered."
+  :type 'alist
+  :group 'color-identifiers)
+
+(defcustom color-identifiers:num-colors 10
+  "The number of different colors to generate."
+  :type 'integer
+  :group 'color-identifiers)
+
+(defcustom color-identifiers:color-luminance 0.0
+  "HSL luminance of identifier colors. If 0.0, calculated from the luminance
+of the default face."
+  :type 'float
+  :group 'color-identifiers)
+
+(defcustom color-identifiers:min-color-saturation 0.0
+  "The minimum saturation that identifier colors will be generated with."
+  :type 'float
+  :group 'color-identifiers)
+
+(defcustom color-identifiers:max-color-saturation 1.0
+  "The maxumum saturation that identifier colors will be generated with."
+  :type 'float
+  :group 'color-identifiers)
+
+(defcustom color-identifiers:mode-to-scan-fn-alist nil
+  "Alist from major modes to their declaration scan functions, for internal use.
+Modify this using `color-identifiers:set-declaration-scan-fn'."
+  :type 'alist
+  :group 'color-identifiers)
+
+(defun color-identifiers:set-declaration-scan-fn (mode scan-fn)
+  "Register SCAN-FN as the declaration scanner for MODE.
+SCAN-FN must scan the entire current buffer and return the
+identifiers to highlight as a list of strings. See
+`color-identifiers:elisp-get-declarations' for an example."
+  (let ((entry (assoc mode color-identifiers:mode-to-scan-fn-alist)))
+    (if entry
+        (setcdr entry scan-fn)
+      (add-to-list 'color-identifiers:mode-to-scan-fn-alist
+                   (cons mode scan-fn)))))
 
 ;;;###autoload
 (define-minor-mode color-identifiers-mode
@@ -89,49 +142,6 @@
 (defadvice enable-theme (after color-identifiers:regen-on-theme-change)
   "Regenerate colors for color-identifiers-mode on theme change."
   (color-identifiers:regenerate-colors))
-
-;;; USER-VISIBLE VARIABLES AND FUNCTIONS =======================================
-
-(defvar color-identifiers:modes-alist nil
-  "Alist of major modes and the ways to distinguish identifiers in those modes.
-The value of each cons cell provides three constraints for finding identifiers.
-A word must match all three constraints to be colored as an identifier.  The
-value has the form (IDENTIFIER-CONTEXT-RE IDENTIFIER-RE IDENTIFIER-FACES).
-
-IDENTIFIER-CONTEXT-RE is a regexp matching the text that must precede an
-identifier.
-IDENTIFIER-RE is a regexp whose first capture group matches identifiers.
-IDENTIFIER-FACES is a list of faces with which the major mode decorates
-identifiers or a function returning such a list.  If the list includes nil,
-unfontified words will be considered.")
-
-(defvar color-identifiers:num-colors 10
-  "The number of different colors to generate.")
-
-(defvar color-identifiers:color-luminance nil
-  "HSL luminance of identifier colors. If nil, calculated from the luminance
-of the default face.")
-
-(defvar color-identifiers:min-color-saturation 0.0
-    "The minimum saturation that identifier colors will be generated with.")
-
-(defvar color-identifiers:max-color-saturation 1.0
-    "The maxumum saturation that identifier colors will be generated with.")
-
-(defvar color-identifiers:mode-to-scan-fn-alist nil
-  "Alist from major modes to their declaration scan functions, for internal use.
-Modify this using `color-identifiers:set-declaration-scan-fn'.")
-
-(defun color-identifiers:set-declaration-scan-fn (mode scan-fn)
-  "Register SCAN-FN as the declaration scanner for MODE.
-SCAN-FN must scan the entire current buffer and return the
-identifiers to highlight as a list of strings. See
-`color-identifiers:elisp-get-declarations' for an example."
-  (let ((entry (assoc mode color-identifiers:mode-to-scan-fn-alist)))
-    (if entry
-        (setcdr entry scan-fn)
-      (add-to-list 'color-identifiers:mode-to-scan-fn-alist
-                   (cons mode scan-fn)))))
 
 ;;; MAJOR MODE SUPPORT =========================================================
 
@@ -456,7 +466,7 @@ incompatible with Emacs Lisp syntax, such as reader macros (#)."
   "Generate perceptually distinct colors with the same luminance in HSL space.
 Colors are output to `color-identifiers:colors'."
   (interactive)
-  (let* ((luminance (or color-identifiers:color-luminance
+  (let* ((luminance (or (if (= color-identifiers:color-luminance 0.0) nil color-identifiers:color-luminance)
                        (max 0.35 (min 0.8 (color-identifiers:attribute-luminance :foreground)))))
          (min-saturation (float color-identifiers:min-color-saturation))
          (saturation-range (- (float color-identifiers:max-color-saturation) min-saturation))
